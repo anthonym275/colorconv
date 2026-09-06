@@ -2,6 +2,7 @@ mod color;
 
 use color::{Lab, Rgb};
 use std::env;
+use std::io::{self, BufRead};
 use std::process::ExitCode;
 
 fn main() -> ExitCode {
@@ -27,11 +28,44 @@ fn main() -> ExitCode {
 }
 
 fn run_rgb_to_lab(args: &[String]) -> Result<(), String> {
-    let hex = args.first().ok_or("usage: colorconv rgb-to-lab <hex>")?;
-    let rgb = Rgb::from_hex(hex)?;
-    let lab = rgb.to_lab();
-    println!("L: {:.2}  a: {:.2}  b: {:.2}", lab.l, lab.a, lab.b);
-    Ok(())
+    match args.first() {
+        Some(hex) => {
+            let rgb = Rgb::from_hex(hex)?;
+            let lab = rgb.to_lab();
+            println!("L: {:.2}  a: {:.2}  b: {:.2}", lab.l, lab.a, lab.b);
+            Ok(())
+        }
+        // No hex on the command line: treat stdin as a batch, one hex code
+        // per line, so a whole palette can be piped through at once.
+        None => run_rgb_to_lab_batch(),
+    }
+}
+
+fn run_rgb_to_lab_batch() -> Result<(), String> {
+    let stdin = io::stdin();
+    let mut had_error = false;
+    for (i, line) in stdin.lock().lines().enumerate() {
+        let line = line.map_err(|e| format!("failed to read stdin: {e}"))?;
+        let hex = line.trim();
+        if hex.is_empty() {
+            continue;
+        }
+        match Rgb::from_hex(hex) {
+            Ok(rgb) => {
+                let lab = rgb.to_lab();
+                println!("{hex}  L: {:.2}  a: {:.2}  b: {:.2}", lab.l, lab.a, lab.b);
+            }
+            Err(msg) => {
+                eprintln!("line {}: {msg}", i + 1);
+                had_error = true;
+            }
+        }
+    }
+    if had_error {
+        Err("one or more lines failed to parse".to_string())
+    } else {
+        Ok(())
+    }
 }
 
 fn run_lab_to_rgb(args: &[String]) -> Result<(), String> {
@@ -58,9 +92,11 @@ fn print_usage() {
         "colorconv - convert between sRGB and CIE L*a*b*\n\n\
          usage:\n\
          \x20 colorconv rgb-to-lab <hex>\n\
+         \x20 colorconv rgb-to-lab            (reads hex codes from stdin, one per line)\n\
          \x20 colorconv lab-to-rgb <L> <a> <b>\n\n\
          examples:\n\
          \x20 colorconv rgb-to-lab FF5733\n\
-         \x20 colorconv lab-to-rgb 58.99 60.94 55.60"
+         \x20 colorconv lab-to-rgb 58.99 60.94 55.60\n\
+         \x20 printf 'FF5733\\n000000\\n' | colorconv rgb-to-lab"
     );
 }

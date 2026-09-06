@@ -28,6 +28,19 @@ The hex argument accepts an optional leading `#`. Lab values are plain
 floats; L is expected in 0..100, a and b are unbounded but meaningful
 values sit roughly in -128..127.
 
+Running `rgb-to-lab` with no hex argument reads hex codes from stdin
+instead, one per line, and prints one result line per input:
+
+```
+printf 'FF5733\n000000\n' | colorconv rgb-to-lab
+FF5733  L: 58.99  a: 60.94  b: 55.60
+000000  L: 0.00  a: 0.00  b: 0.00
+```
+
+Blank lines are skipped. A line that doesn't parse is reported on stderr
+with its line number and the rest of the batch still runs; the process
+exits non-zero if any line failed.
+
 Round-tripping isn't always exact: Lab covers colors outside the sRGB
 gamut, so converting an out-of-gamut Lab value back to RGB clamps to the
 nearest representable color rather than failing.
@@ -45,8 +58,8 @@ cargo build --release
 
 `src/color.rs` has the actual math: the sRGB gamma curve, the sRGB/XYZ
 matrices (D65 white point, 2-degree observer), and the XYZ/Lab piecewise
-functions from the CIE spec. `src/main.rs` is just argument parsing around
-those two conversions.
+functions from the CIE spec. `src/main.rs` wraps those conversions with
+argument parsing and the stdin batch mode.
 
 ## License
 
