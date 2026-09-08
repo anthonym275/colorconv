@@ -24,6 +24,14 @@ pub struct Lab {
     pub b: f64,
 }
 
+// Hue in degrees (0..360), saturation and lightness as percentages (0..100).
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct Hsl {
+    pub h: f64,
+    pub s: f64,
+    pub l: f64,
+}
+
 impl Rgb {
     pub fn from_hex(s: &str) -> Result<Rgb, String> {
         let s = s.trim().trim_start_matches('#');
@@ -48,6 +56,34 @@ impl Rgb {
     pub fn to_lab(self) -> Lab {
         let (x, y, z) = self.to_xyz();
         xyz_to_lab(x, y, z)
+    }
+
+    pub fn to_hsl(self) -> Hsl {
+        let r = self.r as f64 / 255.0;
+        let g = self.g as f64 / 255.0;
+        let b = self.b as f64 / 255.0;
+        let max = r.max(g).max(b);
+        let min = r.min(g).min(b);
+        let l = (max + min) / 2.0;
+
+        let range = max - min;
+        if range < f64::EPSILON {
+            return Hsl { h: 0.0, s: 0.0, l: l * 100.0 };
+        }
+
+        let s = if l > 0.5 {
+            range / (2.0 - max - min)
+        } else {
+            range / (max + min)
+        };
+        let h = if max == r {
+            (g - b) / range + if g < b { 6.0 } else { 0.0 }
+        } else if max == g {
+            (b - r) / range + 2.0
+        } else {
+            (r - g) / range + 4.0
+        };
+        Hsl { h: h * 60.0, s: s * 100.0, l: l * 100.0 }
     }
 
     fn to_xyz(self) -> (f64, f64, f64) {
@@ -80,6 +116,41 @@ impl Lab {
             g: to_byte(linear_to_srgb(g)),
             b: to_byte(linear_to_srgb(b)),
         }
+    }
+}
+
+impl Hsl {
+    pub fn to_rgb(self) -> Rgb {
+        let s = (self.s / 100.0).clamp(0.0, 1.0);
+        let l = (self.l / 100.0).clamp(0.0, 1.0);
+
+        if s < f64::EPSILON {
+            let v = to_byte(l);
+            return Rgb { r: v, g: v, b: v };
+        }
+
+        let h = self.h.rem_euclid(360.0) / 360.0;
+        let q = if l < 0.5 { l * (1.0 + s) } else { l + s - l * s };
+        let p = 2.0 * l - q;
+        Rgb {
+            r: to_byte(hue_to_channel(p, q, h + 1.0 / 3.0)),
+            g: to_byte(hue_to_channel(p, q, h)),
+            b: to_byte(hue_to_channel(p, q, h - 1.0 / 3.0)),
+        }
+    }
+}
+
+// Standard HSL->RGB hue folding, t wrapped to a single turn.
+fn hue_to_channel(p: f64, q: f64, t: f64) -> f64 {
+    let t = t.rem_euclid(1.0);
+    if t < 1.0 / 6.0 {
+        p + (q - p) * 6.0 * t
+    } else if t < 1.0 / 2.0 {
+        q
+    } else if t < 2.0 / 3.0 {
+        p + (q - p) * (2.0 / 3.0 - t) * 6.0
+    } else {
+        p
     }
 }
 
@@ -175,5 +246,36 @@ mod tests {
         assert!(Rgb::from_hex("XYZ123").is_err());
         assert!(Rgb::from_hex("ABC").is_err());
         assert!(Rgb::from_hex("#336699").is_ok());
+    }
+
+    #[test]
+    fn pure_red_hsl() {
+        let hsl = Rgb { r: 255, g: 0, b: 0 }.to_hsl();
+        assert!(hsl.h.abs() < 0.05);
+        assert!((hsl.s - 100.0).abs() < 0.05);
+        assert!((hsl.l - 50.0).abs() < 0.05);
+    }
+
+    #[test]
+    fn gray_has_zero_saturation() {
+        let hsl = Rgb { r: 128, g: 128, b: 128 }.to_hsl();
+        assert!(hsl.s.abs() < 0.05);
+    }
+
+    #[test]
+    fn hsl_round_trip_holds_within_rounding() {
+        let original = Rgb { r: 200, g: 80, b: 40 };
+        let back = original.to_hsl().to_rgb();
+        assert!((original.r as i16 - back.r as i16).abs() <= 1);
+        assert!((original.g as i16 - back.g as i16).abs() <= 1);
+        assert!((original.b as i16 - back.b as i16).abs() <= 1);
+    }
+
+    #[test]
+    fn hsl_to_rgb_matches_known_value() {
+        // #FF5733 worked out by hand: max=r=1.0, min=b=0.2, l=0.6, s=1.0,
+        // h = ((g-b)/range) * 60 = 10.588...
+        let rgb = Hsl { h: 10.588, s: 100.0, l: 60.0 }.to_rgb();
+        assert_eq!(rgb.to_hex(), "FF5733");
     }
 }

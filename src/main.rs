@@ -1,6 +1,6 @@
 mod color;
 
-use color::{Lab, Rgb};
+use color::{Hsl, Lab, Rgb};
 use std::env;
 use std::io::{self, BufRead};
 use std::process::ExitCode;
@@ -11,6 +11,8 @@ fn main() -> ExitCode {
     let result = match args.first().map(String::as_str) {
         Some("rgb-to-lab") => run_rgb_to_lab(&args[1..]),
         Some("lab-to-rgb") => run_lab_to_rgb(&args[1..]),
+        Some("rgb-to-hsl") => run_rgb_to_hsl(&args[1..]),
+        Some("hsl-to-rgb") => run_hsl_to_rgb(&args[1..]),
         Some("-h") | Some("--help") | None => {
             print_usage();
             return ExitCode::SUCCESS;
@@ -87,16 +89,47 @@ fn run_lab_to_rgb(args: &[String]) -> Result<(), String> {
     Ok(())
 }
 
+fn run_rgb_to_hsl(args: &[String]) -> Result<(), String> {
+    let hex = args.first().ok_or("usage: colorconv rgb-to-hsl <hex>")?;
+    let rgb = Rgb::from_hex(hex)?;
+    let hsl = rgb.to_hsl();
+    println!("H: {:.2}  S: {:.2}%  L: {:.2}%", hsl.h, hsl.s, hsl.l);
+    Ok(())
+}
+
+fn run_hsl_to_rgb(args: &[String]) -> Result<(), String> {
+    if args.len() != 3 {
+        return Err("usage: colorconv hsl-to-rgb <H> <S> <L>".to_string());
+    }
+    let parse = |i: usize, name: &str| -> Result<f64, String> {
+        args[i]
+            .parse::<f64>()
+            .map_err(|_| format!("{name} must be a number, got {:?}", args[i]))
+    };
+    let hsl = Hsl {
+        h: parse(0, "H")?,
+        s: parse(1, "S")?,
+        l: parse(2, "L")?,
+    };
+    let rgb = hsl.to_rgb();
+    println!("#{}", rgb.to_hex());
+    Ok(())
+}
+
 fn print_usage() {
     println!(
-        "colorconv - convert between sRGB and CIE L*a*b*\n\n\
+        "colorconv - convert between sRGB, HSL, and CIE L*a*b*\n\n\
          usage:\n\
          \x20 colorconv rgb-to-lab <hex>\n\
          \x20 colorconv rgb-to-lab            (reads hex codes from stdin, one per line)\n\
-         \x20 colorconv lab-to-rgb <L> <a> <b>\n\n\
+         \x20 colorconv lab-to-rgb <L> <a> <b>\n\
+         \x20 colorconv rgb-to-hsl <hex>\n\
+         \x20 colorconv hsl-to-rgb <H> <S> <L>\n\n\
          examples:\n\
          \x20 colorconv rgb-to-lab FF5733\n\
          \x20 colorconv lab-to-rgb 58.99 60.94 55.60\n\
+         \x20 colorconv rgb-to-hsl FF5733\n\
+         \x20 colorconv hsl-to-rgb 10.59 100 60\n\
          \x20 printf 'FF5733\\n000000\\n' | colorconv rgb-to-lab"
     );
 }

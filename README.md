@@ -1,7 +1,7 @@
 # colorconv
 
-A small command-line tool that converts colors between sRGB (hex) and
-CIE L\*a\*b\*.
+A small command-line tool that converts colors between sRGB (hex), HSL,
+and CIE L\*a\*b\*.
 
 Hex codes are what you paste into CSS or a design tool, but they're a poor
 space for anything that involves *comparing* colors - RGB distance doesn't
@@ -13,6 +13,12 @@ you want to do that math in Lab, not RGB.
 
 This tool does the round trip: sRGB -> linear RGB -> CIE XYZ -> Lab, and
 back. No dependencies, no config, just the conversion.
+
+HSL is included too, mostly because it's the format designers actually
+type into a color picker. It's not perceptually uniform the way Lab is -
+don't use HSL distance for the same comparisons Lab is good at - but
+having it saves a trip to a separate tool when you just need to eyeball
+or tweak a color.
 
 ## Usage
 
@@ -45,6 +51,16 @@ Round-tripping isn't always exact: Lab covers colors outside the sRGB
 gamut, so converting an out-of-gamut Lab value back to RGB clamps to the
 nearest representable color rather than failing.
 
+HSL works the same way, just without the batch mode:
+
+```
+colorconv rgb-to-hsl FF5733
+H: 10.59  S: 100.00%  L: 60.00%
+
+colorconv hsl-to-rgb 10.59 100 60
+#FF5733
+```
+
 ## Building
 
 Requires only the Rust standard library.
@@ -57,9 +73,11 @@ cargo build --release
 ## How it works
 
 `src/color.rs` has the actual math: the sRGB gamma curve, the sRGB/XYZ
-matrices (D65 white point, 2-degree observer), and the XYZ/Lab piecewise
-functions from the CIE spec. `src/main.rs` wraps those conversions with
-argument parsing and the stdin batch mode.
+matrices (D65 white point, 2-degree observer), the XYZ/Lab piecewise
+functions from the CIE spec, and the HSL conversions (the standard
+min/max-channel formulas, same as what's in the CSS Color spec).
+`src/main.rs` wraps those conversions with argument parsing and the
+stdin batch mode.
 
 ## License
 
