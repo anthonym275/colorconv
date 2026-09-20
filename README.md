@@ -47,6 +47,25 @@ Blank lines are skipped. A line that doesn't parse is reported on stderr
 with its line number and the rest of the batch still runs; the process
 exits non-zero if any line failed.
 
+Every command takes an optional `--json` flag (anywhere in its arguments)
+that prints one JSON object per result instead of the plain-text form,
+for piping into `jq` or another script:
+
+```
+colorconv rgb-to-lab FF5733 --json
+{"l":58.99,"a":60.94,"b":55.60}
+
+printf 'FF5733\n000000\n' | colorconv rgb-to-lab --json
+{"hex":"FF5733","l":58.99,"a":60.94,"b":55.60}
+{"hex":"000000","l":0.00,"a":0.00,"b":0.00}
+
+colorconv lab-to-rgb 58.99 60.94 55.60 --json
+{"hex":"FF5733"}
+```
+
+Parse errors on stderr are always plain text, `--json` only changes the
+successful result lines on stdout.
+
 Round-tripping isn't always exact: Lab covers colors outside the sRGB
 gamut, so converting an out-of-gamut Lab value back to RGB clamps to the
 nearest representable color rather than failing.

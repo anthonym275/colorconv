@@ -29,21 +29,41 @@ fn main() -> ExitCode {
     }
 }
 
+// Pulls "--json" out of an argument list regardless of where it appears,
+// so it can sit before or after the positional arguments.
+fn extract_json_flag(args: &[String]) -> (Vec<String>, bool) {
+    let mut json = false;
+    let mut rest = Vec::with_capacity(args.len());
+    for a in args {
+        if a == "--json" {
+            json = true;
+        } else {
+            rest.push(a.clone());
+        }
+    }
+    (rest, json)
+}
+
 fn run_rgb_to_lab(args: &[String]) -> Result<(), String> {
+    let (args, json) = extract_json_flag(args);
     match args.first() {
         Some(hex) => {
             let rgb = Rgb::from_hex(hex)?;
             let lab = rgb.to_lab();
-            println!("L: {:.2}  a: {:.2}  b: {:.2}", lab.l, lab.a, lab.b);
+            if json {
+                println!("{{\"l\":{:.2},\"a\":{:.2},\"b\":{:.2}}}", lab.l, lab.a, lab.b);
+            } else {
+                println!("L: {:.2}  a: {:.2}  b: {:.2}", lab.l, lab.a, lab.b);
+            }
             Ok(())
         }
         // No hex on the command line: treat stdin as a batch, one hex code
         // per line, so a whole palette can be piped through at once.
-        None => run_rgb_to_lab_batch(),
+        None => run_rgb_to_lab_batch(json),
     }
 }
 
-fn run_rgb_to_lab_batch() -> Result<(), String> {
+fn run_rgb_to_lab_batch(json: bool) -> Result<(), String> {
     let stdin = io::stdin();
     let mut had_error = false;
     for (i, line) in stdin.lock().lines().enumerate() {
@@ -55,7 +75,14 @@ fn run_rgb_to_lab_batch() -> Result<(), String> {
         match Rgb::from_hex(hex) {
             Ok(rgb) => {
                 let lab = rgb.to_lab();
-                println!("{hex}  L: {:.2}  a: {:.2}  b: {:.2}", lab.l, lab.a, lab.b);
+                if json {
+                    println!(
+                        "{{\"hex\":\"{hex}\",\"l\":{:.2},\"a\":{:.2},\"b\":{:.2}}}",
+                        lab.l, lab.a, lab.b
+                    );
+                } else {
+                    println!("{hex}  L: {:.2}  a: {:.2}  b: {:.2}", lab.l, lab.a, lab.b);
+                }
             }
             Err(msg) => {
                 eprintln!("line {}: {msg}", i + 1);
@@ -71,8 +98,9 @@ fn run_rgb_to_lab_batch() -> Result<(), String> {
 }
 
 fn run_lab_to_rgb(args: &[String]) -> Result<(), String> {
+    let (args, json) = extract_json_flag(args);
     if args.len() != 3 {
-        return Err("usage: colorconv lab-to-rgb <L> <a> <b>".to_string());
+        return Err("usage: colorconv lab-to-rgb <L> <a> <b> [--json]".to_string());
     }
     let parse = |i: usize, name: &str| -> Result<f64, String> {
         args[i]
@@ -85,21 +113,33 @@ fn run_lab_to_rgb(args: &[String]) -> Result<(), String> {
         b: parse(2, "b")?,
     };
     let rgb = lab.to_rgb();
-    println!("#{}", rgb.to_hex());
+    if json {
+        println!("{{\"hex\":\"{}\"}}", rgb.to_hex());
+    } else {
+        println!("#{}", rgb.to_hex());
+    }
     Ok(())
 }
 
 fn run_rgb_to_hsl(args: &[String]) -> Result<(), String> {
-    let hex = args.first().ok_or("usage: colorconv rgb-to-hsl <hex>")?;
+    let (args, json) = extract_json_flag(args);
+    let hex = args
+        .first()
+        .ok_or("usage: colorconv rgb-to-hsl <hex> [--json]")?;
     let rgb = Rgb::from_hex(hex)?;
     let hsl = rgb.to_hsl();
-    println!("H: {:.2}  S: {:.2}%  L: {:.2}%", hsl.h, hsl.s, hsl.l);
+    if json {
+        println!("{{\"h\":{:.2},\"s\":{:.2},\"l\":{:.2}}}", hsl.h, hsl.s, hsl.l);
+    } else {
+        println!("H: {:.2}  S: {:.2}%  L: {:.2}%", hsl.h, hsl.s, hsl.l);
+    }
     Ok(())
 }
 
 fn run_hsl_to_rgb(args: &[String]) -> Result<(), String> {
+    let (args, json) = extract_json_flag(args);
     if args.len() != 3 {
-        return Err("usage: colorconv hsl-to-rgb <H> <S> <L>".to_string());
+        return Err("usage: colorconv hsl-to-rgb <H> <S> <L> [--json]".to_string());
     }
     let parse = |i: usize, name: &str| -> Result<f64, String> {
         args[i]
@@ -112,7 +152,11 @@ fn run_hsl_to_rgb(args: &[String]) -> Result<(), String> {
         l: parse(2, "L")?,
     };
     let rgb = hsl.to_rgb();
-    println!("#{}", rgb.to_hex());
+    if json {
+        println!("{{\"hex\":\"{}\"}}", rgb.to_hex());
+    } else {
+        println!("#{}", rgb.to_hex());
+    }
     Ok(())
 }
 
@@ -120,16 +164,18 @@ fn print_usage() {
     println!(
         "colorconv - convert between sRGB, HSL, and CIE L*a*b*\n\n\
          usage:\n\
-         \x20 colorconv rgb-to-lab <hex>\n\
-         \x20 colorconv rgb-to-lab            (reads hex codes from stdin, one per line)\n\
-         \x20 colorconv lab-to-rgb <L> <a> <b>\n\
-         \x20 colorconv rgb-to-hsl <hex>\n\
-         \x20 colorconv hsl-to-rgb <H> <S> <L>\n\n\
+         \x20 colorconv rgb-to-lab <hex> [--json]\n\
+         \x20 colorconv rgb-to-lab [--json]   (reads hex codes from stdin, one per line)\n\
+         \x20 colorconv lab-to-rgb <L> <a> <b> [--json]\n\
+         \x20 colorconv rgb-to-hsl <hex> [--json]\n\
+         \x20 colorconv hsl-to-rgb <H> <S> <L> [--json]\n\n\
+         \x20 --json prints one JSON object per result instead of the plain-text form.\n\n\
          examples:\n\
          \x20 colorconv rgb-to-lab FF5733\n\
+         \x20 colorconv rgb-to-lab FF5733 --json\n\
          \x20 colorconv lab-to-rgb 58.99 60.94 55.60\n\
          \x20 colorconv rgb-to-hsl FF5733\n\
          \x20 colorconv hsl-to-rgb 10.59 100 60\n\
-         \x20 printf 'FF5733\\n000000\\n' | colorconv rgb-to-lab"
+         \x20 printf 'FF5733\\n000000\\n' | colorconv rgb-to-lab --json"
     );
 }
