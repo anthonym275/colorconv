@@ -100,6 +100,17 @@ impl Rgb {
 }
 
 impl Lab {
+    // CIE76 delta-E: plain Euclidean distance in Lab space. It's not as
+    // perceptually even as CIE94 or CIE2000, but it's the distance the
+    // whole "use Lab instead of RGB" pitch is built on, and it's cheap
+    // enough to run over a whole palette without a second thought.
+    pub fn delta_e76(self, other: Lab) -> f64 {
+        let dl = self.l - other.l;
+        let da = self.a - other.a;
+        let db = self.b - other.b;
+        (dl * dl + da * da + db * db).sqrt()
+    }
+
     pub fn to_rgb(self) -> Rgb {
         let (x, y, z) = lab_to_xyz(self);
 
@@ -269,6 +280,27 @@ mod tests {
         assert!((original.r as i16 - back.r as i16).abs() <= 1);
         assert!((original.g as i16 - back.g as i16).abs() <= 1);
         assert!((original.b as i16 - back.b as i16).abs() <= 1);
+    }
+
+    #[test]
+    fn delta_e76_is_zero_for_identical_colors() {
+        let lab = Rgb { r: 51, g: 102, b: 153 }.to_lab();
+        assert!(lab.delta_e76(lab).abs() < 0.001);
+    }
+
+    #[test]
+    fn delta_e76_matches_known_value() {
+        // Two Lab points on the L axis only: distance is just the L delta.
+        let a = Lab { l: 50.0, a: 0.0, b: 0.0 };
+        let b = Lab { l: 60.0, a: 0.0, b: 0.0 };
+        assert!((a.delta_e76(b) - 10.0).abs() < 0.001);
+    }
+
+    #[test]
+    fn delta_e76_black_to_white() {
+        let black = Rgb { r: 0, g: 0, b: 0 }.to_lab();
+        let white = Rgb { r: 255, g: 255, b: 255 }.to_lab();
+        assert!((black.delta_e76(white) - 100.0).abs() < 0.1);
     }
 
     #[test]

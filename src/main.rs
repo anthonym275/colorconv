@@ -13,6 +13,7 @@ fn main() -> ExitCode {
         Some("lab-to-rgb") => run_lab_to_rgb(&args[1..]),
         Some("rgb-to-hsl") => run_rgb_to_hsl(&args[1..]),
         Some("hsl-to-rgb") => run_hsl_to_rgb(&args[1..]),
+        Some("delta-e") => run_delta_e(&args[1..]),
         Some("-h") | Some("--help") | None => {
             print_usage();
             return ExitCode::SUCCESS;
@@ -160,6 +161,22 @@ fn run_hsl_to_rgb(args: &[String]) -> Result<(), String> {
     Ok(())
 }
 
+fn run_delta_e(args: &[String]) -> Result<(), String> {
+    let (args, json) = extract_json_flag(args);
+    if args.len() != 2 {
+        return Err("usage: colorconv delta-e <hex1> <hex2> [--json]".to_string());
+    }
+    let a = Rgb::from_hex(&args[0])?.to_lab();
+    let b = Rgb::from_hex(&args[1])?.to_lab();
+    let de = a.delta_e76(b);
+    if json {
+        println!("{{\"delta_e76\":{:.2}}}", de);
+    } else {
+        println!("dE76: {:.2}", de);
+    }
+    Ok(())
+}
+
 fn print_usage() {
     println!(
         "colorconv - convert between sRGB, HSL, and CIE L*a*b*\n\n\
@@ -168,7 +185,8 @@ fn print_usage() {
          \x20 colorconv rgb-to-lab [--json]   (reads hex codes from stdin, one per line)\n\
          \x20 colorconv lab-to-rgb <L> <a> <b> [--json]\n\
          \x20 colorconv rgb-to-hsl <hex> [--json]\n\
-         \x20 colorconv hsl-to-rgb <H> <S> <L> [--json]\n\n\
+         \x20 colorconv hsl-to-rgb <H> <S> <L> [--json]\n\
+         \x20 colorconv delta-e <hex1> <hex2> [--json]\n\n\
          \x20 --json prints one JSON object per result instead of the plain-text form.\n\n\
          examples:\n\
          \x20 colorconv rgb-to-lab FF5733\n\
@@ -176,6 +194,7 @@ fn print_usage() {
          \x20 colorconv lab-to-rgb 58.99 60.94 55.60\n\
          \x20 colorconv rgb-to-hsl FF5733\n\
          \x20 colorconv hsl-to-rgb 10.59 100 60\n\
+         \x20 colorconv delta-e FF5733 FF5744\n\
          \x20 printf 'FF5733\\n000000\\n' | colorconv rgb-to-lab --json"
     );
 }

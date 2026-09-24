@@ -80,6 +80,20 @@ colorconv hsl-to-rgb 10.59 100 60
 #FF5733
 ```
 
+To actually compare two colors, use `delta-e`. It converts both hex codes
+to Lab and reports the CIE76 distance between them - straight Euclidean
+distance in L\*a\*b\* space. As a rough guide, below 1.0 is imperceptible,
+1-2 is only noticeable in a side-by-side comparison, and above 10 is a
+clearly different color:
+
+```
+colorconv delta-e FF5733 000000
+dE76: 101.41
+
+colorconv delta-e FF5733 000000 --json
+{"delta_e76":101.41}
+```
+
 ## Building
 
 Requires only the Rust standard library.
